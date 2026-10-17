@@ -68,6 +68,35 @@ ul.task-list li input[type="checkbox"] {
 }</script>
 <style>html{ scroll-behavior: smooth; }</style>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -99,7 +128,7 @@ ul.task-list li input[type="checkbox"] {
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./EDA.html"> 
-<span class="menu-text">Explanatory Data Analysis</span></a>
+<span class="menu-text">Exploratory Data Analysis</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./CNN.html"> 
@@ -115,7 +144,7 @@ ul.task-list li input[type="checkbox"] {
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./Appendix.html"> 
-<span class="menu-text">Appendix</span></a>
+<span class="menu-text">Appendix and References</span></a>
   </li>  
 </ul>
           </div> <!-- /navcollapse -->
@@ -128,14 +157,8 @@ ul.task-list li input[type="checkbox"] {
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">On this page</h2>
-   
-  <ul>
-  <li><a href="#discussion" id="toc-discussion" class="nav-link active" data-scroll-target="#discussion"><span class="header-section-number">1</span> Discussion</a></li>
-  </ul>
-</nav>
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -160,14 +183,15 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="discussion" class="level2" data-number="1">
-<h2 data-number="1" class="anchored" data-anchor-id="discussion"><span class="header-section-number">1</span> Discussion</h2>
+<p>The CNN shows that a writer can be identified from a single digit well above chance, but not reliably. On the held-out session the tuned network named the correct writer for 55.0% of the images, against 5% expected by guessing, and it scored 11.4 percentage points higher than the linear baseline, a difference that the choice of writers is unlikely to explain. It was not clearly better than the default CNN in accuracy (a lead of 5.7 points, interval <span class="math inline">\(-1.9\)</span> to 13.6), but its probabilities were far better calibrated: a cross-entropy of 1.39 against 5.87. The interval for the tuned model (42.7% to 67.1%) is wide, because each session holds only about 100 independent writer-digit cells.</p>
+<p>Accuracy varied enormously between writers, from none of writer 5’s images (0 of 250) to all of the images of writers 7 and 18. The errors were not scattered: whole writer-digit cells of near-identical images were given to a single wrong writer, for example 71% of writer 10’s images to writer 2, and a few writers absorbed many of the others’ images (writer 2 received 459 predictions, of which 31% were correct). This agrees with the exploratory analysis, where a writer’s average digit in another session was only about 20% closer to their own earlier sessions than to another writer’s (distance ratio about 0.8). A new session can therefore resemble someone else’s training data more than the writer’s own. Tuning narrowed the gap between training and validation accuracy from 55 to 26 points, but a large gap remains.</p>
+<p>The settings were chosen on one validation session, and the tuned model scored higher there (60.4%) than on the test session, which is the usual optimism after selecting settings on the same data, so 55.0% is the figure to quote. The comparisons between models rest on one training run each, the data are simulated, and the 20 writers are a closed set that the model has already seen. Combining several images before naming a writer, or training on more sessions, might raise accuracy, but neither was tested here.</p>
+<p>The Siamese network met the same obstacle in another form: it recognised pairs from the same session well, but was much less successful at recognising the same writer across sessions. Both models therefore point to the same conclusion: variation within a writer from one session to the next is the main obstacle to recognising handwriting in this data set. Because the tasks and metrics differ, the results do not show that either model is better than the other.</p>
 <p>In the Siamese neural network, the training, validation and test data sets differ in their representation of session variability. The training data contain image pairs from multiple sessions, whereas the validation data are restricted to session 4. The test data include both within-session pairs and cross-session pairs, with cross-session comparisons incorporating images from sessions 1–4 and session 5. Consequently, the validation results may not fully reflect the model’s ability to generalize across sessions. This is evident in the <a href="siamese.html#tbl-results-session">Table of session-specific results</a>, where balanced accuracy decreases to 0.554 for cross-session pairs, primarily because sensitivity falls to 0.112. This suggests that the model frequently fails to identify pairs from the same writer when their handwriting samples originate from different sessions.</p>
 <p>The tuning models achieved considerably higher performance, particularly in terms of balanced accuracy, than the final model. One possible explanation is that the hyperparameters were tuned sequentially rather than simultaneously, meaning that interactions between hyperparameters may not have been fully captured. Consequently, the combination selected for the final model may not have been optimal, potentially contributing to its lower performance.</p>
 <p>With regards to model performance, since the same-writer and different-writer classes are balanced, a balanced accuracy of 0.50 provides a useful baseline for random guessing. The high validation performance indicates that the model can distinguish between the two classes under the validation conditions. However, the lower cross-session performance suggests that the model struggles to identify the same writer when handwriting samples originate from different sessions. Consequently, the validation results may overstate the model’s practical reliability across sessions. Furthermore, repeatedly selecting hyperparameters using the same validation set may lead to overly optimistic estimates of validation performance.</p>
 
 
-</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
@@ -260,7 +284,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
   }
     var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
     var mailtoRegex = new RegExp(/^mailto:/);
-      var filterRegex = new RegExp('/' + window.location.host + '/');
+      var filterRegex = new RegExp("https:\/\/Mish827\.github\.io\/DS4I-Assignment2\/");
     var isInternal = (href) => {
         return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
     }

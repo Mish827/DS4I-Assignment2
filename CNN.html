@@ -68,6 +68,35 @@ ul.task-list li input[type="checkbox"] {
 }</script>
 <style>html{ scroll-behavior: smooth; }</style>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -99,7 +128,7 @@ ul.task-list li input[type="checkbox"] {
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./EDA.html"> 
-<span class="menu-text">Explanatory Data Analysis</span></a>
+<span class="menu-text">Exploratory Data Analysis</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link active" href="./CNN.html" aria-current="page"> 
@@ -115,7 +144,7 @@ ul.task-list li input[type="checkbox"] {
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./Appendix.html"> 
-<span class="menu-text">Appendix</span></a>
+<span class="menu-text">Appendix and References</span></a>
   </li>  
 </ul>
           </div> <!-- /navcollapse -->
@@ -133,7 +162,8 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#cnn-analysis" id="toc-cnn-analysis" class="nav-link active" data-scroll-target="#cnn-analysis"><span class="header-section-number">1</span> CNN Analysis</a></li>
+  <li><a href="#methods" id="toc-methods" class="nav-link active" data-scroll-target="#methods"><span class="header-section-number">1</span> Methods</a></li>
+  <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results"><span class="header-section-number">2</span> Results</a></li>
   </ul>
 </nav>
     </div>
@@ -160,8 +190,225 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="cnn-analysis" class="level2" data-number="1">
-<h2 data-number="1" class="anchored" data-anchor-id="cnn-analysis"><span class="header-section-number">1</span> CNN Analysis</h2>
+<section id="methods" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Methods</h1>
+<p>A convolutional neural network (CNN) was built to answer the first research question: can a writer be identified from a single handwritten digit? Each image is assigned to one of the 20 writers, whatever digit it shows, so the digit is neither an input nor a label. The network outputs one probability per writer (a softmax layer) and the predicted writer is the one with the highest probability. Pixel values were divided by 255, and the training, validation and test sessions are those described under Data Splitting. Training used categorical cross-entropy loss, the Adam optimiser and batches of 64 images.</p>
+<p>The network has two convolutional layers (16 filters of 3 <span class="math inline">\(\times\)</span> 3 each, followed by an activation function), dropout after the first convolutional layer, 2 <span class="math inline">\(\times\)</span> 2 max pooling, a flatten layer and a 20-unit softmax output layer. This gives 48,580 trainable parameters, 95% of them in the output layer. When an L2 penalty is used, it is applied to the weights of both convolutional layers and the output layer.</p>
+<p>Three other models give context for the results. The <em>default CNN</em> has the same architecture with the settings of the course example (ReLU, dropout 0.2, learning rate 0.01, no penalty). The <em>nearest-centroid classifier</em> averages each writer’s training images of a digit into a template and assigns a new image to the writer whose template for that digit is closest. The <em>linear model</em> is a softmax regression on the 784 pixels, with no hidden layer. The linear model’s learning rate and number of epochs were set from its own validation curves, so it is lightly tuned.</p>
+<p>All settings of the final CNN were chosen on the validation session only (session 4), in four stages, with three random seeds per candidate:</p>
+<ol type="1">
+<li>activation function (tanh or ReLU), learning rate (0.003 down to 0.00001) and dropout rate (0.1 to 0.7): 72 combinations, ranked on validation accuracy and on validation cross-entropy, with the two ranks added;</li>
+<li>number of filters (8, 16 or 32), kernel size (3 or 5) and pool size (2 or 3): 12 combinations, choosing the highest accuracy among those whose cross-entropy was within 30% of the best;</li>
+<li>number of epochs, from the validation curves, with the same 30% rule;</li>
+<li>the L2 penalty <span class="math inline">\(\nu\)</span>, over eight values from 0 to 0.3, using the value after the one with the lowest cross-entropy, which favours the simpler model.</li>
+</ol>
+<p>Cross-entropy was computed from the predicted probabilities without the penalty term, so it can be compared across penalties. Accuracy and cross-entropy preferred different settings in the first stage, and the rank rule was chosen after seeing that, so it is partly a judgement.</p>
+<p>The final model was fixed before the test session (session 5) was scored. Performance is reported as accuracy, cross-entropy, and per-writer recall and precision. Every writer has 250 test images, so accuracy equals the average per-writer recall (balanced accuracy). The 50 replicates of a digit by one writer in one session are near-duplicates, so the effective sample is about 100 writer-digit cells per session and not 5,000 images, and intervals were obtained by resampling writers.</p>
+</section>
+<section id="results" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Results</h1>
+<p>The first stage favoured tanh with a learning rate of 0.0001 and dropout 0.7 (validation accuracy 59.1% and cross-entropy 1.89, averaged over three seeds). A smaller learning rate (0.00003) gave a lower cross-entropy (about 1.5) but a lower accuracy (about 56%), and dropout rates between 0.5 and 0.7 could not be told apart. In the second stage, the default layout (16 filters of 3 <span class="math inline">\(\times\)</span> 3, 2 <span class="math inline">\(\times\)</span> 2 pooling) had the highest validation accuracy among the architectures inside the cross-entropy tolerance, so it was kept. Validation cross-entropy was lowest after 4 epochs and rose afterwards, while training accuracy approached 100%; 10 epochs was chosen as the point of highest accuracy among the epochs inside the tolerance. The penalty has a U-shaped effect (<a href="#tbl-cnn-nu" class="quarto-xref">Table&nbsp;2</a>): cross-entropy fell from 1.89 without a penalty to 1.39 at <span class="math inline">\(\nu = 0.03\)</span> and rose again, and at <span class="math inline">\(\nu = 0.3\)</span> the model could not learn. The value used was <span class="math inline">\(\nu = 0.1\)</span>. <a href="#tbl-cnn-settings" class="quarto-xref">Table&nbsp;1</a> lists the final settings.</p>
+<div class="cell">
+<div id="tbl-cnn-settings" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-cnn-settings-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Settings of the default and the tuned CNN. Both have the same architecture and 48,580 parameters.
+</figcaption>
+<div aria-describedby="tbl-cnn-settings-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="do-not-create-environment cell caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Setting</th>
+<th style="text-align: left;">Default</th>
+<th style="text-align: left;">Tuned</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Activation</td>
+<td style="text-align: left;">ReLU</td>
+<td style="text-align: left;">tanh</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Dropout rate</td>
+<td style="text-align: left;">0.2</td>
+<td style="text-align: left;">0.7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Learning rate</td>
+<td style="text-align: left;">0.01</td>
+<td style="text-align: left;">0.0001</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">L2 penalty</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">0.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Filters per layer</td>
+<td style="text-align: left;">16</td>
+<td style="text-align: left;">16</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Kernel size</td>
+<td style="text-align: left;">3 x 3</td>
+<td style="text-align: left;">3 x 3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Pool size</td>
+<td style="text-align: left;">2 x 2</td>
+<td style="text-align: left;">2 x 2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Epochs</td>
+<td style="text-align: left;">10</td>
+<td style="text-align: left;">10</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<div class="cell">
+<div id="tbl-cnn-nu" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-cnn-nu-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Effect of the L2 penalty on the validation session (mean of three seeds, 10 epochs). The values for 0.0001 and 0.001, which are close to the first row, are omitted.
+</figcaption>
+<div aria-describedby="tbl-cnn-nu-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="do-not-create-environment cell caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 8%">
+<col style="width: 26%">
+<col style="width: 28%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;"><span class="math inline">\(\nu\)</span></th>
+<th style="text-align: right;">Training accuracy</th>
+<th style="text-align: right;">Validation accuracy</th>
+<th style="text-align: right;">Validation cross-entropy</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">0</td>
+<td style="text-align: right;">0.979</td>
+<td style="text-align: right;">0.591</td>
+<td style="text-align: right;">1.892</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.003</td>
+<td style="text-align: right;">0.979</td>
+<td style="text-align: right;">0.593</td>
+<td style="text-align: right;">1.727</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.01</td>
+<td style="text-align: right;">0.975</td>
+<td style="text-align: right;">0.600</td>
+<td style="text-align: right;">1.529</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.03</td>
+<td style="text-align: right;">0.957</td>
+<td style="text-align: right;">0.606</td>
+<td style="text-align: right;">1.392</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.1</td>
+<td style="text-align: right;">0.862</td>
+<td style="text-align: right;">0.612</td>
+<td style="text-align: right;">1.447</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.3</td>
+<td style="text-align: right;">0.165</td>
+<td style="text-align: right;">0.135</td>
+<td style="text-align: right;">2.986</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<p>On the validation session, the default CNN reached a training accuracy of 99.4% and a validation accuracy of 44.8%, a gap of 55 points: it memorises the training sessions. The tuned CNN reached 86.0% and 60.4%, a gap of 26 points. The two models have the same architecture, so the improvement comes from the four changed settings together (activation, dropout, learning rate and penalty). The validation score of the tuned CNN is optimistic, because its settings were selected on this session.</p>
+<p>On the held-out session, the tuned CNN identified the writer for 55.0% of the images, against 5% expected by chance with 20 writers (<a href="#tbl-cnn-test" class="quarto-xref">Table&nbsp;3</a>). A 95% interval obtained by resampling writers is 42.7% to 67.1%. The accuracy is lower than the validation accuracy (60.4%), as expected when settings are chosen on the validation session.</p>
+<div class="cell">
+<div id="tbl-cnn-test" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-cnn-test-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: Test performance on session 5 (5,000 images, 250 per writer). Each figure comes from one trained model.
+</figcaption>
+<div aria-describedby="tbl-cnn-test-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="do-not-create-environment cell caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Model</th>
+<th style="text-align: right;">Accuracy (%)</th>
+<th style="text-align: right;">Cross-entropy</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Nearest centroid</td>
+<td style="text-align: right;">47.3</td>
+<td style="text-align: right;">-</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Linear softmax</td>
+<td style="text-align: right;">43.6</td>
+<td style="text-align: right;">-</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Default CNN</td>
+<td style="text-align: right;">49.3</td>
+<td style="text-align: right;">5.87</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Tuned CNN (final model)</td>
+<td style="text-align: right;">55.0</td>
+<td style="text-align: right;">1.39</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Guessing evenly among 20 writers</td>
+<td style="text-align: right;">5.0</td>
+<td style="text-align: right;">3.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<p>Because all models are scored on the same 20 writers, they were compared in pairs, resampling writers. The tuned CNN scored 11.4 percentage points higher than the linear model (95% interval 4.1 to 18.9), so that difference is unlikely to be due to which writers were sampled. Its 5.7-point lead over the default CNN (interval <span class="math inline">\(-1.9\)</span> to 13.6) cannot be distinguished from zero, and the nearest-centroid classifier was not tested formally. The clearest difference between the two CNNs is in the probabilities: the tuned model’s cross-entropy of 1.39 is below the 3.00 of guessing evenly, whereas the default CNN’s 5.87 is about twice that value. The default model is overconfident: it is wrong about half the time, but gives high probability to its wrong answers. The linear baseline was only lightly tuned, so part of its deficit reflects tuning effort and not the convolutional structure.</p>
+<p>Accuracy varied enormously between writers (<a href="#fig-cnn-writer" class="quarto-xref">Figure&nbsp;1</a>). Writers 7 and 18 were identified in every image, and writers 6, 8, 15 and 17 in 76% to 85% of their images, whereas writer 5 was never identified, writer 13 in only 1 of 250 images, and writers 10, 16 and 20 in fewer than 35%. The average per-writer precision was 54.3%. Writers 5 and 13 were also the hardest for a model with different settings, which suggests that the difficulty comes from the data and not from one model.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-cnn-writer" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-cnn-writer-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="CNN_files/figure-html/fig-cnn-writer-1.png" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-cnn-writer-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: Test accuracy (recall) and precision of the tuned CNN for each writer. The dashed line is the 5% expected by chance.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The errors are concentrated in particular pairs of writers, not spread evenly. Seventy-one per cent of writer 10’s images (177) were labelled as writer 2, 60% of writer 5’s (150) as writer 13, and 40% of writer 16’s (100) as writer 1. Some confusions run in both directions (writers 1 and 16, 14 and 15, and 6 and 17), which may mean that the two writers’ handwriting is similar, although this was not checked. The model also over-assigns a few writers: writer 2 received 459 predictions, of which only 144 (31%) were correct, and writer 7 received 398 (63% correct), against a fair share of 250. Many counts are close to 50, 100 or 150, the size of one or more writer-digit cells of near-identical images, so the model tends to assign a whole cell to a single writer. Accuracy was similar for all five digits (50% to 59%), with no digit clearly easier.</p>
+<p>These results agree with the exploratory analysis. Writers differ in measurable ways, but a writer’s average digit in another session was only about 20% closer to their own earlier sessions than to another writer’s handwriting (distance ratio about 0.8), so a new session often resembles another writer’s training data.</p>
+<p>There are a few limitations. Validation and test scores rest on about 100 writer-digit cells each, so differences of a few points between models are within noise. The settings were chosen in stages, which ignores interactions between them, and every stage is another look at the validation session, so the validation scores of the tuned CNN are optimistic. The comparisons between models rest on one training run per model: the intervals reflect which writers were sampled, not variation between random starts. The baselines received less tuning than the CNN. Finally, a test result from an earlier configuration was seen before the tuning was redone, and no setting was chosen using the test session.</p>
 
 
 </section>
@@ -257,7 +504,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
   }
     var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
     var mailtoRegex = new RegExp(/^mailto:/);
-      var filterRegex = new RegExp('/' + window.location.host + '/');
+      var filterRegex = new RegExp("https:\/\/Mish827\.github\.io\/DS4I-Assignment2\/");
     var isInternal = (href) => {
         return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
     }
