@@ -12,6 +12,194 @@ library(knitr)
 library(kableExtra)
 ```
 
+# Convolutional Neural Network
+
+## Methods
+
+### Question and task
+
+-   Question: can a writer be identified from a single handwritten digit?
+
+-   Input: one $28 \times 28$ image
+
+-   Output: a probability for each of the 20 writers (softmax); the predicted writer has the highest probability
+
+-   Each image is labelled with its writer, whatever digit it shows; the network is not told the digit
+
+-   Split by session: train sessions 1 -- 3, validation session 4, test session 5
+
+### Architecture and calibration
+
+-   CNN: two convolutional layers (16 filters, $3 \times 3$), dropout, $2 \times 2$ max pooling, softmax output
+
+-   Linear softmax: pixels straight to the 20 writers. Nearest centroid: average image per writer and digit
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+calibration <- data.frame(
+  Hyperparameter = c("Hidden layers", "Activation", "Dropout rate", "Learning rate",
+                     "L2 regularisation", "Epochs", "Told the digit"),
+  `Default CNN` = c("2 conv.", "ReLU", "0.2", "$1 \\times 10^{-2}$", "none", "10", "no"),
+  `Tuned CNN` = c("2 conv.", "tanh", "0.7", "$1 \\times 10^{-4}$", "0.1", "10", "no"),
+  `Linear softmax` = c("none", "none", "none", "$1 \\times 10^{-4}$", "none", "20", "no"),
+  `Nearest centroid` = c("none", "none", "none", "none", "none", "none", "yes"),
+  check.names = FALSE
+)
+
+calibration |>
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,
+    linesep = "",
+    align = c("l", "l", "l", "l", "l")
+  ) |>
+  kable_styling(font_size = 8)
+```
+
+### Tuning
+
+-   Stage 1: activation function, learning rate, dropout rate (72 combinations)
+
+-   Stage 2: number of filters, kernel size, pool size (12 combinations)
+
+-   Stage 3: number of epochs
+
+-   Stage 4: L2 penalty $\nu$ (8 values)
+
+-   Validation session only (session 4)
+
+-   Average over three random seeds reported
+
+### Metrics
+
+#### Accuracy
+
+-   Proportion of images assigned to the correct writer
+$$\text{Accuracy} = \frac{\text{Correct predictions}}{\text{All images}}$$
+
+#### Cross-entropy
+
+-   Quality of the predicted probabilities (lower is better; guessing evenly gives 3.0)
+$$\text{Cross-entropy} = -\frac{1}{n}\sum_{i=1}^{n}\log \hat{p}_i$$
+
+where $\hat{p}_i$ is the probability given to the true writer of image $i$
+
+## Results
+
+### Tuning the L2 penalty
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+nu_tab <- data.frame(
+  nu = c("0", "0.003", "0.01", "0.03", "0.1", "0.3"),
+  train = c(0.979, 0.979, 0.975, 0.957, 0.862, 0.165),
+  val = c(0.591, 0.593, 0.600, 0.606, 0.612, 0.135),
+  ce = c(1.892, 1.727, 1.529, 1.392, 1.447, 2.986)
+)
+
+nu_tab |>
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,
+    align = c("r", "r", "r", "r"),
+    col.names = c("$\\nu$", "Training", "Validation", "Cross-entropy")
+  ) |>
+  row_spec(4, background = "yellow!25") |>
+  row_spec(5, background = "yellow!45") |>
+  row_spec(6, background = "red!15")
+```
+
+-   Training and validation accuracy; cross-entropy on the validation session (mean of three seeds)
+
+-   Dark yellow: value used ($\nu = 0.1$); light yellow: lowest cross-entropy; red: the model cannot learn
+
+### Training versus validation
+
+| Model       |  Training | Validation |       Gap |
+|:------------|----------:|-----------:|----------:|
+| Default CNN |     99.4% |      44.8% | 55 points |
+| Tuned CNN   |     86.0% |      60.4% | 26 points |
+
+-   The default CNN memorises the training sessions
+
+-   Tuning halves the gap, but a large gap remains
+
+-   The tuned score is optimistic: its settings were chosen on session 4
+
+### Test performance (session 5)
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+test_tab <- data.frame(
+  Model = c("Nearest centroid", "Linear softmax", "Default CNN",
+            "Tuned CNN (final)", "Guessing among 20 writers"),
+  Accuracy = c("47.3%", "43.6%", "49.3%", "55.0%", "5.0%"),
+  `Cross-entropy` = c("--", "--", "5.87", "1.39", "3.00"),
+  check.names = FALSE
+)
+
+test_tab |>
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    align = c("l", "r", "r")
+  ) |>
+  row_spec(4, bold = TRUE, background = "yellow!45")
+```
+
+-   95% interval for the tuned CNN: 42.7% to 67.1%
+
+-   Versus the linear model: +11.4 points (95% interval 4.1 to 18.9)
+
+-   Versus the default CNN: +5.7 points (interval $-1.9$ to 13.6), not distinguishable from zero
+
+### Which writers, and where the errors go
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 3
+#| out-width: "100%"
+recall    <- c(0.396, 0.576, 0.424, 0.404, 0.000, 0.840, 1.000, 0.764, 0.596, 0.292,
+               0.676, 0.656, 0.004, 0.508, 0.796, 0.344, 0.852, 1.000, 0.600, 0.272)
+precision <- c(0.343, 0.314, 0.731, 0.605, 0.000, 0.814, 0.628, 0.508, 0.603, 0.537,
+               0.610, 0.594, 0.005, 0.599, 0.686, 0.637, 0.842, 1.000, 0.556, 0.249)
+par(mar = c(4, 4, 1, 1))
+mids <- barplot(rbind(recall, precision), beside = TRUE, names.arg = rep("", 20),
+                col = c("grey30", "grey75"), ylim = c(0, 1.25), yaxt = "n",
+                xlab = "Writer (person_id)", ylab = "Proportion")
+axis(1, at = colMeans(mids), labels = 1:20, tick = FALSE, cex.axis = 0.8, line = -0.5)
+axis(2, at = seq(0, 1, 0.2), las = 1)
+abline(h = 0.05, lty = 2)
+legend("top", c("Recall (accuracy)", "Precision"), fill = c("grey30", "grey75"),
+       bty = "n", horiz = TRUE, cex = 0.8)
+```
+
+-   Writers 7 and 18: all correct. Writer 5: none. Writer 13: 1 of 250
+
+-   Writer 10 $\rightarrow$ 2: 71% of images; writer 5 $\rightarrow$ 13: 60%
+
+-   Writer 2 received 459 predictions, only 31% correct (fair share: 250)
+
+### Conclusions and limits
+
+-   A writer can be identified well above chance (55% against 5%), but not reliably
+
+-   Likely reason: a writer's digits change between sessions by about 80% of the distance to another writer's
+
+-   Limits: one validation and one test session, one training run per model, simulated data, a closed set of 20 writers
+
+
+
+
 # Siamese Neural Network
 
 ## Methods
